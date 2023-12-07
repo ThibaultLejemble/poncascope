@@ -225,6 +225,54 @@ void mlsDryRun() {
 }
 
 
+
+void doSomething()
+{
+    auto eval_scalar_field_ASO = [&](const VectorType& input_pos) -> Scalar
+    {
+        using FitASO = Ponca::BasketDiff<
+            Ponca::Basket<
+                PPAdapter, 
+                SmoothWeightFunc, 
+                Ponca::OrientedSphereFit>,
+            Ponca::DiffType::FitSpaceDer,
+            Ponca::OrientedSphereDer, 
+            Ponca::MlsSphereFitDer,
+            Ponca::CurvatureEstimatorBase, 
+            Ponca::NormalDerivativesCurvatureEstimator>;
+
+        VectorType current_pos = input_pos;
+        Scalar current_value = std::numeric_limits<Scalar>::max();
+        for(int mm = 0; mm < mlsIter; ++mm) 
+        {
+            FitASO fit;
+            fit.setWeightFunc(SmoothWeightFunc(NSize));
+            fit.init(current_pos); // weighting function using current pos (not input pos)
+            for(int j : tree.range_neighbors(current_pos, NSize)) {
+                fit.addNeighbor(tree.point_data()[j]);
+            }
+            if(fit.finalize() == Ponca::STABLE) {
+                current_pos = fit.project(input_pos); // always project input pos
+                current_value = fit.potential(input_pos);
+                // current_gradient = fit.primitiveGradient(input_pos);
+            } else {
+                // not enough neighbors (if far from the point cloud)
+                return std::numeric_limits<Scalar>::max();
+            }
+        }
+        return current_value;
+    };
+
+    for(int i = 0; i < 10; ++i) 
+    {
+        const VectorType pos = tree.point_data()[i].pos();
+        const Scalar scalar_field_value = eval_scalar_field_ASO(pos);
+        std::cout << pos.transpose() << ": " << scalar_field_value << std::endl;
+    }
+}
+
+
+
 /// Define Polyscope callbacks
 void callback() {
 
@@ -253,6 +301,9 @@ void callback() {
     if (ImGui::Button("APSS")) estimateDifferentialQuantitiesWithAPSS();
     ImGui::SameLine();
     if (ImGui::Button("ASO")) estimateDifferentialQuantitiesWithASO();
+
+    ImGui::Separator();
+    if (ImGui::Button("Do something")) doSomething();
 
     ImGui::PopItemWidth();
 }
