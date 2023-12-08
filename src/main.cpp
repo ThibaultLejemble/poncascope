@@ -14,6 +14,8 @@
 #include <utility>
 #include <chrono>
 
+#include "Image.h"
+
 // Types definition
 using Scalar             = double;
 using VectorType         = Eigen::Vector<Scalar, 3>;
@@ -263,12 +265,58 @@ void doSomething()
         return current_value;
     };
 
-    for(int i = 0; i < 10; ++i) 
+    std::cout << "NSize = " << NSize << std::endl;
+
+    const Scalar value_max = 0.1;
+    const int resoX = 512;
+    const int resoY = 512 * (3./2.);
+    img::ImageRGBAf img(resoY, resoX);
+    const Scalar xmin = -1;
+    const Scalar xmax = +1;
+    const Scalar ymin = -1;
+    const Scalar ymax = +2;
+    const Scalar dx = (xmax - xmin) / resoX;
+    const Scalar dy = (ymax - ymin) / resoY;
+    const Scalar z = -0.1;
+    const img::ImageRGBAf::Color BLUE  = img::ImageRGBAf::Color(0,0,1, 1);
+    const img::ImageRGBAf::Color RED   = img::ImageRGBAf::Color(1,0,0, 1);
+    const img::ImageRGBAf::Color WHITE = img::ImageRGBAf::Color(1,1,1, 1);
+    const img::ImageRGBAf::Color BLACK = img::ImageRGBAf::Color(0,0,0, 0);
+    for(int i = 0; i < resoY; ++i)
     {
-        const VectorType pos = tree.point_data()[i].pos();
-        const Scalar scalar_field_value = eval_scalar_field_ASO(pos);
-        std::cout << pos.transpose() << ": " << scalar_field_value << std::endl;
+        #pragma omp parrallel for
+        for(int j = 0; j < resoX; ++j)
+        {
+            const VectorType p = VectorType(
+                xmin + j * dx,
+                ymin + i * dy,
+                z
+            );
+            const Scalar value = eval_scalar_field_ASO(p);
+            if(value == std::numeric_limits<Scalar>::max())
+            {
+                img(i,j) = BLACK;
+            }
+            else
+            {
+                const Scalar t = std::clamp(value/value_max, -1., +1.);
+                if(t < 0)
+                    img(i,j) = (1+t) * WHITE - t * BLUE;
+                else
+                    img(i,j) = (1-t) * WHITE + t * RED;
+            }
+        }
+        if(i % 100 == 0)
+            std::cout << i << "/" << resoY-1 << std::endl;
     }
+    img::save("test.png", img, true);
+
+    // for(int i = 0; i < 10; ++i) 
+    // {
+    //     const VectorType pos = tree.point_data()[i].pos();
+    //     const Scalar scalar_field_value = eval_scalar_field_ASO(pos);
+    //     std::cout << pos.transpose() << ": " << scalar_field_value << std::endl;
+    // }
 }
 
 
